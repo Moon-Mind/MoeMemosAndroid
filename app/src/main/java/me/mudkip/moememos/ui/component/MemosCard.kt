@@ -3,6 +3,7 @@ package me.mudkip.moememos.ui.component
 import android.content.Intent
 import android.text.format.DateUtils
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PinDrop
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
@@ -39,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,7 @@ import com.skydoves.sandwich.suspendOnSuccess
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Memo
+import me.mudkip.moememos.ext.getFullLink
 import me.mudkip.moememos.ext.icon
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.titleResource
@@ -57,6 +61,8 @@ import me.mudkip.moememos.viewmodel.LocalUserState
 @Composable
 fun MemosCard(
     memo: Memo,
+    onEdit: (Memo) -> Unit,
+    host: String? = null,
     previewMode: Boolean = false
 ) {
     val memosViewModel = LocalMemos.current
@@ -66,49 +72,80 @@ fun MemosCard(
         modifier = Modifier
             .padding(horizontal = 15.dp, vertical = 10.dp)
             .fillMaxWidth(),
-        border = if (memo.pinned) { BorderStroke(1.dp, MaterialTheme.colorScheme.primary) } else { null }
+        border = if (memo.pinned) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
     ) {
-        Column {
-            Row(
-                modifier = Modifier.padding(start = 15.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(DateUtils.getRelativeTimeSpanString(memo.date.toEpochMilli(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS).toString(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.outline
-                )
-                if (LocalUserState.current.currentUser?.defaultVisibility != memo.visibility) {
-                    Icon(
-                        memo.visibility.icon,
-                        contentDescription = stringResource(memo.visibility.titleResource),
-                        modifier = Modifier
-                            .padding(start = 5.dp)
-                            .size(20.dp),
-                        tint = MaterialTheme.colorScheme.outline
+        Box(
+            modifier = Modifier
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = {
+                            onEdit(memo)
+                        }
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                MemosCardActionButton(memo)
-            }
-
-            MemoContent(memo, previewMode = previewMode, checkboxChange = { checked, startOffset, endOffset ->
-                scope.launch {
-                    var text = memo.content.substring(startOffset, endOffset)
-                    text = if (checked) {
-                        text.replace("[ ]", "[x]")
-                    } else {
-                        text.replace("[x]", "[ ]")
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .padding(start = 15.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        DateUtils.getRelativeTimeSpanString(
+                            memo.date.toEpochMilli(),
+                            System.currentTimeMillis(),
+                            DateUtils.SECOND_IN_MILLIS
+                        ).toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    if (LocalUserState.current.currentUser?.defaultVisibility != memo.visibility) {
+                        Icon(
+                            memo.visibility.icon,
+                            contentDescription = stringResource(memo.visibility.titleResource),
+                            modifier = Modifier
+                                .padding(start = 5.dp)
+                                .size(20.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                     }
-                    memosViewModel.editMemo(memo.identifier, memo.content.replaceRange(startOffset, endOffset, text), memo.resources, memo.visibility)
+                    Spacer(modifier = Modifier.weight(1f))
+                    MemosCardActionButton(memo, host)
                 }
-            })
+
+                MemoContent(
+                    memo,
+                    previewMode = previewMode,
+                    checkboxChange = { checked, startOffset, endOffset ->
+                        scope.launch {
+                            var text = memo.content.substring(startOffset, endOffset)
+                            text = if (checked) {
+                                text.replace("[ ]", "[x]")
+                            } else {
+                                text.replace("[x]", "[ ]")
+                            }
+                            memosViewModel.editMemo(
+                                memo.identifier,
+                                memo.content.replaceRange(startOffset, endOffset, text),
+                                memo.resources,
+                                memo.visibility
+                            )
+                        }
+                    })
+            }
         }
     }
 }
 
 @Composable
 fun MemosCardActionButton(
-    memo: Memo
+    memo: Memo,
+    host: String? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -185,6 +222,25 @@ fun MemosCardActionButton(
                         contentDescription = null
                     )
                 })
+            host?.let {
+                DropdownMenuItem(
+                    text = { Text(R.string.copy_link.string) },
+                    onClick = {
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, memo.getFullLink(host))
+                            type = "text/plain"
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, "Copy Link")
+                        context.startActivity(shareIntent)
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Link,
+                            contentDescription = null
+                        )
+                    })
+            }
             DropdownMenuItem(
                 text = { Text(R.string.archive.string) },
                 onClick = {

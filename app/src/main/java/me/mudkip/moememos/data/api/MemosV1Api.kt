@@ -3,6 +3,8 @@ package me.mudkip.moememos.data.api
 import android.net.Uri
 import androidx.annotation.Keep
 import com.skydoves.sandwich.ApiResponse
+import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -33,7 +35,8 @@ interface MemosV1Api {
     suspend fun listMemos(
         @Query("pageSize") pageSize: Int,
         @Query("pageToken") pageToken: String? = null,
-        @Query("filter") filter: String
+        @Query("filter") filter: String,
+        @Query("view") view: MemosView? = MemosView.MEMO_VIEW_FULL
     ): ApiResponse<ListMemosResponse>
 
     @POST("api/v1/memos")
@@ -47,9 +50,6 @@ interface MemosV1Api {
 
     @DELETE("api/v1/memos/{id}")
     suspend fun deleteMemo(@Path("id") memoId: String): ApiResponse<Unit>
-
-    @GET("api/v1/memos/{id}/tags")
-    suspend fun listMemoTags(@Path("id") memoId: String, @Query("filter") filter: String? = null): ApiResponse<ListMemoTagsResponse>
 
     @DELETE("api/v1/memos/{id}/tags/{tag}")
     suspend fun deleteMemoTag(@Path("id") memoId: String, @Path("tag") tag: String, @Query("deleteRelatedMemos") deleteRelatedMemos: Boolean): ApiResponse<Unit>
@@ -73,14 +73,13 @@ interface MemosV1Api {
 @Keep
 data class MemosV1User(
     val name: String,
-    val id: Int,
     val role: MemosRole,
     val username: String,
     val email: String,
     val nickname: String,
     val avatarUrl: String,
     val description: String,
-    val rowStatus: MemosRowStatus,
+    val state: MemosV1State? = null,
     val createTime: Date,
     val updateTime: Date
 )
@@ -112,13 +111,9 @@ data class MemosV1SetMemoResourcesRequestItem(
 data class UpdateMemoRequest(
     val content: String? = null,
     val visibility: MemosVisibility? = null,
-    val rowStatus: MemosRowStatus? = null,
-    val pinned: Boolean? = null
-)
-
-@Keep
-data class ListMemoTagsResponse(
-    val tagAmounts: Map<String, Int>
+    val state: MemosV1State? = null,
+    val pinned: Boolean? = null,
+    val updateTime: Date? = null,
 )
 
 @Keep
@@ -138,16 +133,16 @@ data class CreateResourceRequest(
 data class MemosV1Memo(
     val name: String,
     val uid: String,
-    val rowStatus: MemosRowStatus,
+    val state: MemosV1State? = null,
     val creator: String,
     val createTime: Date,
     val updateTime: Date,
     val displayTime: Date,
     val content: String,
     val visibility: MemosVisibility,
-    val tags: List<String>,
     val pinned: Boolean,
-    val resources: List<MemosV1Resource>
+    val resources: List<MemosV1Resource>,
+    val tags: List<String>? = null
 )
 
 @Keep
@@ -177,3 +172,13 @@ data class MemosV1UserSetting(
     val appearance: String,
     val memoVisibility: MemosVisibility
 )
+
+@JsonClass(generateAdapter = false)
+enum class MemosV1State {
+    @field:Json(name = "STATE_UNSPECIFIED")
+    STATE_UNSPECIFIED,
+    @field:Json(name = "NORMAL")
+    NORMAL,
+    @field:Json(name = "ARCHIVED")
+    ARCHIVED,
+}

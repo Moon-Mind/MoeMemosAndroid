@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,6 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import me.mudkip.moememos.ui.component.MemosCard
+import me.mudkip.moememos.ui.page.common.LocalRootNavController
+import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.viewmodel.LocalMemos
 import timber.log.Timber
 
@@ -25,9 +28,11 @@ import timber.log.Timber
 @Composable
 fun MemosList(
     contentPadding: PaddingValues,
+    lazyListState: LazyListState = rememberLazyListState(),
     tag: String? = null,
     searchString: String? = null
 ) {
+    val navController = LocalRootNavController.current
     val viewModel = LocalMemos.current
     val refreshState = rememberPullToRefreshState()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -39,7 +44,7 @@ fun MemosList(
         tag?.let { tag ->
             fullList = fullList.filter { memo ->
                 memo.content.contains("#$tag") ||
-                    memo.content.contains("#$tag/")
+                        memo.content.contains("#$tag/")
             }
         }
 
@@ -53,11 +58,10 @@ fun MemosList(
 
         fullList
     }
-    val lazyListState = rememberLazyListState()
     var listTopId: String? by rememberSaveable {
         mutableStateOf(null)
     }
-    
+
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = {
@@ -74,7 +78,14 @@ fun MemosList(
             state = lazyListState
         ) {
             items(filteredMemos, key = { it.identifier }) { memo ->
-                MemosCard(memo, previewMode = true)
+                MemosCard(
+                    memo = memo,
+                    host = viewModel.host,
+                    onEdit = { selectedMemo ->
+                        navController.navigate("${RouteName.EDIT}?memoId=${selectedMemo.identifier}")
+                    },
+                    previewMode = true
+                )
             }
         }
     }
